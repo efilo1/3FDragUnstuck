@@ -1,59 +1,83 @@
-# 3FDragUnstuck
+# 3FDragUnstuck Enhanced Fork
 
-A tiny macOS menu bar app for reducing the release delay after three-finger drag.
+An enhanced fork of 3FDragUnstuck, a lightweight macOS menu bar utility designed to reduce the release delay associated with native Three Finger Drag.
 
-After a three-finger drag, macOS can keep the drag active for a short moment after your fingers leave the trackpad. This makes drag-and-drop, selection rectangles, and quick follow-up clicks feel stuck.
+## Original Project
 
-This app watches trackpad contact counts. When a touch sequence peaks at exactly three fingers and then all fingers are released, it posts one `leftMouseUp` event at the current pointer position.
+This project is based on the excellent work by **ddugel3**.
 
-## Install
+A sincere thank you to the original author for the brilliant idea and implementation. The original project solved a very specific macOS usability issue in an elegant and lightweight way, making native Three Finger Drag feel significantly more responsive.
 
-Download the latest release:
+Original repository:
 
-https://github.com/ddugel3/3FDragUnstuck/releases/latest
+https://github.com/ddugel3/3FDragUnstuck
 
-Then:
+## What's Included In This Fork
 
-1. Unzip `3FDragUnstuck.app`.
-2. Move it to `/Applications`.
-3. Open it. If macOS blocks it, right-click the app and choose Open.
-4. Click the `3F` menu bar item and choose `Request Accessibility Permission`.
-5. Enable it in System Settings > Privacy & Security > Accessibility.
-6. Quit and reopen the app if the permission does not apply immediately.
+This fork preserves the original functionality while adding several quality of life improvements:
 
-## Build
+### Features
 
-```sh
+* Reduced Three Finger Drag release delay
+* Menu bar utility with minimal resource usage
+* Accessibility permission status indicator
+* Runtime menu bar icon hiding and restoration
+* Persistent settings between launches
+* Configurable override modifier system
+
+  * Shift
+  * Control
+  * Option
+* Application icon support
+* Additional icon concepts and design variants included in the repository
+
+### Override Modifiers
+
+The original override functionality has been expanded to allow selecting different modifier keys.
+
+Available options:
+
+* Shift
+* Control
+* Option
+
+This allows users to choose a modifier that best fits their workflow and avoids conflicts with common shortcuts such as screenshot selection.
+
+### Menu Bar Icon
+
+The menu bar icon can be temporarily hidden while the application continues running.
+
+Launching the application again restores the icon without affecting the underlying functionality.
+
+### Accessibility Status
+
+The application displays the current Accessibility permission state directly in the menu, making troubleshooting easier for new users.
+
+## Building
+
+```bash
 make build
 ```
 
-The app is created at `build/3FDragUnstuck.app`.
+## Verification
 
-To run it locally:
-
-```sh
-open build/3FDragUnstuck.app
+```bash
+make verify
 ```
 
-To create a release zip:
+## Requirements
 
-```sh
-make release
-```
+* macOS
+* Accessibility permissions enabled for the application
 
-## How It Works
+## License
 
-- Loads Apple's private `MultitouchSupport` framework at runtime.
-- Registers a contact frame callback for every multitouch device returned by `MTDeviceCreateList`.
-- Tracks the highest contact count in the current touch sequence.
-- Posts one `kCGEventLeftMouseUp` when the sequence reaches zero active contacts.
+This project remains licensed under the MIT License, consistent with the original project.
 
-It sends `leftMouseUp`, not a full click. The goal is to end a stuck drag without creating a new click.
+## Credits
 
-## Notes
+**Original Author:** ddugel3
 
-- Known working on macOS Tahoe 26.4.1., 26.5.
-- Apple Silicon only for now.
-- Not notarized.
-- Uses private macOS APIs, so macOS updates can break it.
-- Requires Accessibility permission.
+**Fork Maintainer:** efilo1
+
+Special thanks again to ddugel3 for creating the original utility and sharing it with the community.
