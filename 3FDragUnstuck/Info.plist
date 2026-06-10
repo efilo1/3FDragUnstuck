@@ -6,6 +6,8 @@
     <string>en</string>
     <key>CFBundleExecutable</key>
     <string>3FDragUnstuck</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
     <string>io.github.ddugel3.ThreeFDragUnstuck</string>
     <key>CFBundleInfoDictionaryVersion</key>

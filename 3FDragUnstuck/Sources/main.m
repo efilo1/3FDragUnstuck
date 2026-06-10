@@ -18,10 +18,27 @@ typedef struct {
 } DeviceState;
 
 static atomic_bool gEnabled = true;
+static atomic_bool gShiftOverrideEnabled = true;
+static atomic_ullong gOverrideModifierMask = kCGEventFlagMaskAlternate;
 static atomic_llong gLastPostMillis = 0;
 static os_unfair_lock gStateLock = OS_UNFAIR_LOCK_INIT;
 static DeviceState gDeviceStates[16];
 static int gDeviceStateCount = 0;
+static NSString *const ShiftOverrideEnabledKey = @"ShiftOverrideEnabled";
+static NSString *const OverrideModifierKey = @"OverrideModifier";
+static NSString *const OverrideModifierShift = @"Shift";
+static NSString *const OverrideModifierControl = @"Control";
+static NSString *const OverrideModifierOption = @"Option";
+
+static CGEventFlags modifierMaskForName(NSString *name) {
+    if ([name isEqualToString:OverrideModifierShift]) {
+        return kCGEventFlagMaskShift;
+    }
+    if ([name isEqualToString:OverrideModifierControl]) {
+        return kCGEventFlagMaskControl;
+    }
+    return kCGEventFlagMaskAlternate;
+}
 
 static long long nowMillis(void) {
     return (long long)(CFAbsoluteTimeGetCurrent() * 1000.0);
@@ -90,6 +107,11 @@ static int contactFrameCallback(MTDeviceRef device, void *contacts, int contactC
         return 0;
     }
 
+    if (atomic_load(&gShiftOverrideEnabled) &&
+        (CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState) & atomic_load(&gOverrideModifierMask))) {
+        return 0;
+    }
+
     long long now = nowMillis();
     long long last = atomic_load(&gLastPostMillis);
     if (now - last < 80) {
@@ -101,10 +123,16 @@ static int contactFrameCallback(MTDeviceRef device, void *contacts, int contactC
     return 0;
 }
 
-@interface AppDelegate : NSObject <NSApplicationDelegate>
+@interface AppDelegate : NSObject <NSApplicationDelegate, NSMenuDelegate>
 @property(nonatomic, strong) NSStatusItem *statusItem;
 @property(nonatomic, strong) NSMenuItem *enabledItem;
+@property(nonatomic, strong) NSMenuItem *shiftOverrideItem;
+@property(nonatomic, strong) NSMenuItem *overrideModifierItem;
+@property(nonatomic, strong) NSMenuItem *shiftModifierItem;
+@property(nonatomic, strong) NSMenuItem *controlModifierItem;
+@property(nonatomic, strong) NSMenuItem *optionModifierItem;
 @property(nonatomic, strong) NSMenuItem *accessibilityItem;
+@property(nonatomic, strong) NSMenuItem *hideMenuBarIconItem;
 @property(nonatomic, assign) CFArrayRef deviceList;
 @property(nonatomic, assign) void *multitouchHandle;
 @end
@@ -113,9 +141,23 @@ static int contactFrameCallback(MTDeviceRef device, void *contacts, int contactC
 
 - (void)applicationDidFinishLaunching:(NSNotification *)notification {
     (void)notification;
+    [[NSUserDefaults standardUserDefaults] registerDefaults:@{
+        ShiftOverrideEnabledKey: @YES,
+        OverrideModifierKey: OverrideModifierOption
+    }];
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    atomic_store(&gShiftOverrideEnabled, [defaults boolForKey:ShiftOverrideEnabledKey]);
+    atomic_store(&gOverrideModifierMask, modifierMaskForName([defaults stringForKey:OverrideModifierKey]));
     [self setupStatusItem];
     [self requestAccessibilityIfNeeded:NO];
     [self startMultitouchCallback];
+}
+
+- (BOOL)applicationShouldHandleReopen:(NSApplication *)sender hasVisibleWindows:(BOOL)flag {
+    (void)sender;
+    (void)flag;
+    [self showMenuBarIcon];
+    return NO;
 }
 
 - (void)applicationWillTerminate:(NSNotification *)notification {
@@ -131,20 +173,52 @@ static int contactFrameCallback(MTDeviceRef device, void *contacts, int contactC
 }
 
 - (void)setupStatusItem {
+    if (self.statusItem != nil) {
+        return;
+    }
+
     self.statusItem = [[NSStatusBar systemStatusBar] statusItemWithLength:NSVariableStatusItemLength];
     self.statusItem.button.title = @"3F";
     self.statusItem.button.toolTip = @"3FDragUnstuck";
 
     NSMenu *menu = [[NSMenu alloc] initWithTitle:@""];
+    menu.delegate = self;
 
     self.enabledItem = [[NSMenuItem alloc] initWithTitle:@"Enabled" action:@selector(toggleEnabled:) keyEquivalent:@""];
     self.enabledItem.target = self;
     self.enabledItem.state = NSControlStateValueOn;
     [menu addItem:self.enabledItem];
 
-    self.accessibilityItem = [[NSMenuItem alloc] initWithTitle:@"Request Accessibility Permission" action:@selector(requestAccessibilityPermission:) keyEquivalent:@""];
+    self.shiftOverrideItem = [[NSMenuItem alloc] initWithTitle:@"Override Enabled" action:@selector(toggleShiftOverride:) keyEquivalent:@""];
+    self.shiftOverrideItem.target = self;
+    self.shiftOverrideItem.state = atomic_load(&gShiftOverrideEnabled) ? NSControlStateValueOn : NSControlStateValueOff;
+    [menu addItem:self.shiftOverrideItem];
+
+    self.overrideModifierItem = [[NSMenuItem alloc] initWithTitle:@"Override Modifier" action:nil keyEquivalent:@""];
+    NSMenu *modifierMenu = [[NSMenu alloc] initWithTitle:@"Override Modifier"];
+    self.shiftModifierItem = [[NSMenuItem alloc] initWithTitle:@"Shift" action:@selector(selectOverrideModifier:) keyEquivalent:@""];
+    self.controlModifierItem = [[NSMenuItem alloc] initWithTitle:@"Control" action:@selector(selectOverrideModifier:) keyEquivalent:@""];
+    self.optionModifierItem = [[NSMenuItem alloc] initWithTitle:@"Option" action:@selector(selectOverrideModifier:) keyEquivalent:@""];
+    self.shiftModifierItem.target = self;
+    self.controlModifierItem.target = self;
+    self.optionModifierItem.target = self;
+    self.shiftModifierItem.representedObject = OverrideModifierShift;
+    self.controlModifierItem.representedObject = OverrideModifierControl;
+    self.optionModifierItem.representedObject = OverrideModifierOption;
+    [modifierMenu addItem:self.shiftModifierItem];
+    [modifierMenu addItem:self.controlModifierItem];
+    [modifierMenu addItem:self.optionModifierItem];
+    self.overrideModifierItem.submenu = modifierMenu;
+    [self updateOverrideModifierMenuState];
+    [menu addItem:self.overrideModifierItem];
+
+    self.accessibilityItem = [[NSMenuItem alloc] initWithTitle:@"Accessibility Permission Required" action:@selector(requestAccessibilityPermission:) keyEquivalent:@""];
     self.accessibilityItem.target = self;
     [menu addItem:self.accessibilityItem];
+
+    self.hideMenuBarIconItem = [[NSMenuItem alloc] initWithTitle:@"Hide Menu Bar Icon" action:@selector(hideMenuBarIcon:) keyEquivalent:@""];
+    self.hideMenuBarIconItem.target = self;
+    [menu addItem:self.hideMenuBarIconItem];
 
     [menu addItem:[NSMenuItem separatorItem]];
 
@@ -155,6 +229,29 @@ static int contactFrameCallback(MTDeviceRef device, void *contacts, int contactC
     self.statusItem.menu = menu;
 }
 
+- (void)showMenuBarIcon {
+    [self setupStatusItem];
+    [self requestAccessibilityIfNeeded:NO];
+}
+
+- (void)hideMenuBarIcon:(id)sender {
+    (void)sender;
+    if (self.statusItem == nil) {
+        return;
+    }
+
+    [[NSStatusBar systemStatusBar] removeStatusItem:self.statusItem];
+    self.statusItem = nil;
+    self.enabledItem = nil;
+    self.shiftOverrideItem = nil;
+    self.overrideModifierItem = nil;
+    self.shiftModifierItem = nil;
+    self.controlModifierItem = nil;
+    self.optionModifierItem = nil;
+    self.accessibilityItem = nil;
+    self.hideMenuBarIconItem = nil;
+}
+
 - (void)toggleEnabled:(id)sender {
     (void)sender;
     BOOL enabled = !atomic_load(&gEnabled);
@@ -162,16 +259,51 @@ static int contactFrameCallback(MTDeviceRef device, void *contacts, int contactC
     self.enabledItem.state = enabled ? NSControlStateValueOn : NSControlStateValueOff;
 }
 
+- (void)toggleShiftOverride:(id)sender {
+    (void)sender;
+    BOOL enabled = !atomic_load(&gShiftOverrideEnabled);
+    atomic_store(&gShiftOverrideEnabled, enabled);
+    [[NSUserDefaults standardUserDefaults] setBool:enabled forKey:ShiftOverrideEnabledKey];
+    self.shiftOverrideItem.state = enabled ? NSControlStateValueOn : NSControlStateValueOff;
+}
+
+- (void)selectOverrideModifier:(id)sender {
+    NSString *name = [sender representedObject];
+    if (name == nil) {
+        return;
+    }
+    [[NSUserDefaults standardUserDefaults] setObject:name forKey:OverrideModifierKey];
+    atomic_store(&gOverrideModifierMask, modifierMaskForName(name));
+    [self updateOverrideModifierMenuState];
+}
+
+- (void)updateOverrideModifierMenuState {
+    NSString *name = [[NSUserDefaults standardUserDefaults] stringForKey:OverrideModifierKey];
+    self.shiftModifierItem.state = [name isEqualToString:OverrideModifierShift] ? NSControlStateValueOn : NSControlStateValueOff;
+    self.controlModifierItem.state = [name isEqualToString:OverrideModifierControl] ? NSControlStateValueOn : NSControlStateValueOff;
+    self.optionModifierItem.state = [name isEqualToString:OverrideModifierOption] ? NSControlStateValueOn : NSControlStateValueOff;
+}
+
+- (void)menuWillOpen:(NSMenu *)menu {
+    (void)menu;
+    [self requestAccessibilityIfNeeded:NO];
+}
+
 - (void)requestAccessibilityPermission:(id)sender {
     (void)sender;
-    [self requestAccessibilityIfNeeded:YES];
+    if ([self requestAccessibilityIfNeeded:YES]) {
+        NSURL *url = [NSURL URLWithString:@"x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"];
+        [[NSWorkspace sharedWorkspace] openURL:url];
+    }
 }
 
 - (BOOL)requestAccessibilityIfNeeded:(BOOL)prompt {
     NSDictionary *options = @{(__bridge NSString *)kAXTrustedCheckOptionPrompt: @(prompt)};
     BOOL trusted = AXIsProcessTrustedWithOptions((__bridge CFDictionaryRef)options);
-    self.accessibilityItem.title = trusted ? @"Accessibility Permission Granted" : @"Request Accessibility Permission";
-    self.accessibilityItem.enabled = !trusted;
+    if (self.accessibilityItem != nil) {
+        self.accessibilityItem.title = trusted ? @"Accessibility Permission Granted" : @"Accessibility Permission Required";
+        self.accessibilityItem.state = trusted ? NSControlStateValueOn : NSControlStateValueOff;
+    }
     return trusted;
 }
 
