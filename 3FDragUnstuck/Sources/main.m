@@ -29,6 +29,7 @@ static NSString *const OverrideModifierKey = @"OverrideModifier";
 static NSString *const OverrideModifierShift = @"Shift";
 static NSString *const OverrideModifierControl = @"Control";
 static NSString *const OverrideModifierOption = @"Option";
+static NSString *const OverrideModifierFn = @"Fn";
 
 static CGEventFlags modifierMaskForName(NSString *name) {
     if ([name isEqualToString:OverrideModifierShift]) {
@@ -36,6 +37,9 @@ static CGEventFlags modifierMaskForName(NSString *name) {
     }
     if ([name isEqualToString:OverrideModifierControl]) {
         return kCGEventFlagMaskControl;
+    }
+    if ([name isEqualToString:OverrideModifierFn]) {
+        return kCGEventFlagMaskSecondaryFn;
     }
     return kCGEventFlagMaskAlternate;
 }
@@ -131,6 +135,7 @@ static int contactFrameCallback(MTDeviceRef device, void *contacts, int contactC
 @property(nonatomic, strong) NSMenuItem *shiftModifierItem;
 @property(nonatomic, strong) NSMenuItem *controlModifierItem;
 @property(nonatomic, strong) NSMenuItem *optionModifierItem;
+@property(nonatomic, strong) NSMenuItem *fnModifierItem;
 @property(nonatomic, strong) NSMenuItem *accessibilityItem;
 @property(nonatomic, strong) NSMenuItem *hideMenuBarIconItem;
 @property(nonatomic, assign) CFArrayRef deviceList;
@@ -199,15 +204,19 @@ static int contactFrameCallback(MTDeviceRef device, void *contacts, int contactC
     self.shiftModifierItem = [[NSMenuItem alloc] initWithTitle:@"Shift" action:@selector(selectOverrideModifier:) keyEquivalent:@""];
     self.controlModifierItem = [[NSMenuItem alloc] initWithTitle:@"Control" action:@selector(selectOverrideModifier:) keyEquivalent:@""];
     self.optionModifierItem = [[NSMenuItem alloc] initWithTitle:@"Option" action:@selector(selectOverrideModifier:) keyEquivalent:@""];
+    self.fnModifierItem = [[NSMenuItem alloc] initWithTitle:@"Fn (Globe)" action:@selector(selectOverrideModifier:) keyEquivalent:@""];
     self.shiftModifierItem.target = self;
     self.controlModifierItem.target = self;
     self.optionModifierItem.target = self;
+    self.fnModifierItem.target = self;
     self.shiftModifierItem.representedObject = OverrideModifierShift;
     self.controlModifierItem.representedObject = OverrideModifierControl;
     self.optionModifierItem.representedObject = OverrideModifierOption;
+    self.fnModifierItem.representedObject = OverrideModifierFn;
     [modifierMenu addItem:self.shiftModifierItem];
     [modifierMenu addItem:self.controlModifierItem];
     [modifierMenu addItem:self.optionModifierItem];
+    [modifierMenu addItem:self.fnModifierItem];
     self.overrideModifierItem.submenu = modifierMenu;
     [self updateOverrideModifierMenuState];
     [menu addItem:self.overrideModifierItem];
@@ -248,6 +257,7 @@ static int contactFrameCallback(MTDeviceRef device, void *contacts, int contactC
     self.shiftModifierItem = nil;
     self.controlModifierItem = nil;
     self.optionModifierItem = nil;
+    self.fnModifierItem = nil;
     self.accessibilityItem = nil;
     self.hideMenuBarIconItem = nil;
 }
@@ -282,6 +292,7 @@ static int contactFrameCallback(MTDeviceRef device, void *contacts, int contactC
     self.shiftModifierItem.state = [name isEqualToString:OverrideModifierShift] ? NSControlStateValueOn : NSControlStateValueOff;
     self.controlModifierItem.state = [name isEqualToString:OverrideModifierControl] ? NSControlStateValueOn : NSControlStateValueOff;
     self.optionModifierItem.state = [name isEqualToString:OverrideModifierOption] ? NSControlStateValueOn : NSControlStateValueOff;
+    self.fnModifierItem.state = [name isEqualToString:OverrideModifierFn] ? NSControlStateValueOn : NSControlStateValueOff;
 }
 
 - (void)menuWillOpen:(NSMenu *)menu {
