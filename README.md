@@ -20,28 +20,32 @@ This fork preserves the original functionality while adding several quality of l
 
 * Reduced Three Finger Drag release delay
 * Menu bar utility with minimal resource usage
-* Accessibility permission status indicator
-* Runtime menu bar icon hiding and restoration
-* Persistent settings between launches
-* Configurable override modifier system
+* Configurable Override Modifiers
 
   * Shift
   * Control
   * Option
-* Application icon support
-* Additional icon concepts and design variants included in the repository
+  * Fn (Globe)
+* Hide Menu Bar Icon
+* Accessibility Status Indicator
+* Persistent settings between launches
+* Custom Application Icon
+* Additional Icon Designs Included In Repository
 
 ### Override Modifiers
 
-The original override functionality has been expanded to allow selecting different modifier keys.
+The original override functionality has been expanded into a configurable system that lets you select which modifier key suppresses the fast release while it is held.
 
 Available options:
 
 * Shift
 * Control
 * Option
+* Fn (Globe)
 
-This allows users to choose a modifier that best fits their workflow and avoids conflicts with common shortcuts such as screenshot selection.
+This allows users to choose a modifier that best fits their workflow and avoids conflicts with common shortcuts such as screenshot selection. Holding the selected modifier as the drag ends keeps the native release behavior, and your choice is saved between launches.
+
+**Note on Fn (Globe):** Fn (Globe) works best on Apple built-in keyboards and Apple Magic Keyboards. Support on third-party keyboards depends on whether the keyboard exposes the Fn key to macOS; some keyboards handle Fn internally and never report it to the system, so the override cannot trigger.
 
 ### Menu Bar Icon
 
